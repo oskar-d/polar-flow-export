@@ -17,47 +17,16 @@ Licensed under the Apache Software License v2, see:
 """
 
 import cookielib
-import dateutil.parser
 import json
 import logging
 import os
 import sys
-import time
-import urllib2
 import urllib
+import urllib2
+import dateutil.parser
+from tcxfile import TcxFile
+from throttlinghandler import ThrottlingHandler
 
-#------------------------------------------------------------------------------
-
-class ThrottlingHandler(urllib2.BaseHandler):
-    """A throttling handler which ensures that requests to a given host
-    are always spaced out by at least a certain number of (floating point)
-    seconds.
-    """
-
-    def __init__(self, throttleSeconds=1.0):
-        self._throttleSeconds = throttleSeconds
-        self._requestTimeDict = dict()
-
-    def default_open(self, request):
-        hostName = request.get_host()
-        lastRequestTime = self._requestTimeDict.get(hostName, 0)
-        timeSinceLast = time.time() - lastRequestTime
-        
-        if timeSinceLast < self._throttleSeconds:
-            time.sleep(self._throttleSeconds - timeSinceLast)
-        self._requestTimeDict[hostName] = time.time()
-
-
-#------------------------------------------------------------------------------
-
-class TcxFile(object):
-    def __init__(self, workout_id, date_str, content):
-        self.workout_id = workout_id
-        self.date_str = date_str
-        self.content = content
-
-
-#------------------------------------------------------------------------------
 
 class PolarFlowExporter(object):
 
@@ -67,7 +36,7 @@ class PolarFlowExporter(object):
         self._logger = logging.getLogger(self.__class__.__name__)
 
         self._url_opener = urllib2.build_opener(
-                        ThrottlingHandler(0.5),
+            ThrottlingHandler(0.5),
                         urllib2.HTTPCookieProcessor(cookielib.CookieJar()))
         self._url_opener.addheaders = [('User-Agent', 
                 'https://github.com/gabrielreid/polar-flow-export')]
@@ -79,7 +48,7 @@ class PolarFlowExporter(object):
 
         self._logger.debug("Requesting '%s'" % url)
 
-        if post_params != None:
+        if post_params is not None:
             postData = urllib.urlencode(post_params)
         else:
             postData = None
