@@ -48,7 +48,7 @@ class PolarFlowExporter(object):
         url = "https://flow.polar.com%s" % path
         self._logger.debug("Requesting '%s'" % url)
 
-        if post_params != None:
+        if post_params is not None:
             post_data = urllib.urlencode(post_params)
         else:
             post_data = None
@@ -75,8 +75,7 @@ class PolarFlowExporter(object):
         self._logger.info("Logging in user %s", self._username)
         self._execute_request('/')  # Start a new session
         self._execute_request('/login', 
-            dict(returnUrl='https://flow.polar.com/', 
-                    email=self._username, password=self._password))
+            dict(returnUrl='https://flow.polar.com/', email=self._username, password=self._password))
         self._logged_in = True 
         self._logger.info("Successfully logged in")
 
@@ -123,8 +122,7 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.INFO)
     try:
-        (username, password, from_date_str, 
-            to_date_str, output_dir) = sys.argv[1:]
+        (username, password, from_date_str, to_date_str, output_dir) = sys.argv[1:]
     except ValueError:
         sys.stderr.write(("Usage: %s <username> <password> <from_date> "
             "<to_date> <output_dir>\n") % sys.argv[0])
@@ -148,4 +146,3 @@ if __name__ == '__main__':
 
     for d in exporter.failed_downloads:
         print(d)
-
