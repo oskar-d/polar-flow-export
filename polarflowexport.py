@@ -124,7 +124,6 @@ def write_file(tcx_file):
 
 
 if __name__ == '__main__':
-
     logging.basicConfig(level=logging.INFO)
     try:
         (username, password, from_date_str, to_date_str, output_dir) = sys.argv[1:]
