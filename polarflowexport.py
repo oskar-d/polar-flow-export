@@ -16,6 +16,7 @@ Licensed under the Apache Software License v2, see:
     http://www.apache.org/licenses/LICENSE-2.0
 """
 
+import contextlib
 import cookielib
 import json
 import logging
@@ -25,7 +26,7 @@ import urllib
 import urllib2
 import dateutil.parser
 from tcxfile import TcxFile
-from throttlinghandler import ThrottlingHandler
+from throttling_handler import ThrottlingHandler
 
 
 class PolarFlowExporter(object):
@@ -36,31 +37,39 @@ class PolarFlowExporter(object):
         self._logger = logging.getLogger(self.__class__.__name__)
 
         self._url_opener = urllib2.build_opener(
-            ThrottlingHandler(0.5),
+                        ThrottlingHandler(0.5),
                         urllib2.HTTPCookieProcessor(cookielib.CookieJar()))
-        self._url_opener.addheaders = [('User-Agent', 
-                'https://github.com/gabrielreid/polar-flow-export')]
+        self._url_opener.addheaders = [('User-Agent', 'https://github.com/gabrielreid/polar-flow-export')]
         self._logged_in = False
+        self.failed_downloads = []
 
     def _execute_request(self, path, post_params=None):
-
+        data = ""
         url = "https://flow.polar.com%s" % path
-
         self._logger.debug("Requesting '%s'" % url)
 
-        if post_params is not None:
-            postData = urllib.urlencode(post_params)
+        if post_params != None:
+            post_data = urllib.urlencode(post_params)
         else:
-            postData = None
+            post_data = None
 
         try:
-            response = self._url_opener.open(url, postData)
-            data = response.read()
+            with contextlib.closing(urllib.urlopen(url)) as x:
+                response = self._url_opener.open(url, post_data)
+                data = response.read()
         except Exception, e:
             self._logger.error("Error fetching %s: %s" % (url, e))
-            raise Exception(e)
-        response.close()
-        return data  
+            if e.code == 404 or e.code == 400:
+                self._handle_http_errors(e, url)
+                return None
+            else:
+                raise Exception(e)
+        else:
+            return data
+
+    def _handle_http_errors(self, ex, url):
+        self.failed_downloads.append(url)
+        self._logger.error("HTTPError %s" % ex.message)
 
     def _login(self):
         self._logger.info("Logging in user %s", self._username)
@@ -73,41 +82,42 @@ class PolarFlowExporter(object):
 
     def get_tcx_files(self, from_date_str, to_date_str):
         """Returns an iterator of TcxFile objects.
-
         @param from_date_str an ISO-8601 date string
         @param to_date_str an ISO-8601 date string
         """
-        self._logger.info("Fetching TCX files from %s to %s", from_date_str, 
-                                                                to_date_str)
+        self._logger.info("Fetching TCX files from %s to %s", from_date_str, to_date_str)
         if not self._logged_in:
             self._login()
 
         from_date = dateutil.parser.parse(from_date_str)
         to_date = dateutil.parser.parse(to_date_str)
+        from_spec = "%s.%s.%s" % (from_date.day, from_date.month, from_date.year)
+        to_spec = "%s.%s.%s" % (to_date.day, to_date.month, to_date.year)
 
-        from_spec = "%s.%s.%s" % (from_date.day, from_date.month, 
-                                    from_date.year)
-
-        to_spec = "%s.%s.%s" % (to_date.day, to_date.month, 
-                                    to_date.year)
-
-        path = "/training/getCalendarEvents?start=%s&end=%s" % (
-                                                        from_spec, to_spec)
+        path = "/training/getCalendarEvents?start=%s&end=%s" % (from_spec, to_spec)
         activity_refs = json.loads(self._execute_request(path))
 
-
         def get_tcx_file(activity_ref):
-            self._logger.info("Retrieving workout %s" 
-                                % activity_ref['listItemId'])
-            return TcxFile(
-                activity_ref['listItemId'],
-                activity_ref['datetime'],
-                self._execute_request(
-                    "%s/export/tcx/false" % activity_ref['url']))
+            url = activity_ref['url']
+            if "fitness" in url or "orthostatic" in url:
+                print("will not download %s" % url)
+                self.failed_downloads.append(url)
+                return None
+            else:
+                self._logger.info("Retrieving workout from %s" % activity_ref['url'])
+                return TcxFile(activity_ref['listItemId'],
+                               activity_ref['datetime'],
+                               self._execute_request("%s/export/tcx/false" % url))
 
-        return (get_tcx_file(activity_ref) for activity_ref in activity_refs)
+        tcx_files = []
+        for activity_ref in activity_refs:
+            tcx = get_tcx_file(activity_ref)
+            if tcx:
+                tcx_files.append(tcx)
+        return tcx_files
 
 #------------------------------------------------------------------------------
+
 
 if __name__ == '__main__':
 
@@ -131,7 +141,11 @@ if __name__ == '__main__':
         output_file = open(os.path.join(output_dir, filename), 'wb')
         output_file.write(tcx_file.content)
         output_file.close()
-        print "Wrote file %s" % filename
+        print("Wrote file %s" % filename)
 
-    print "Export complete"
+    print("Export complete")
+    print ("These activities were not downloaded:")
+
+    for d in exporter.failed_downloads:
+        print(d)
 
