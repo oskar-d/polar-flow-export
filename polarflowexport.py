@@ -112,10 +112,15 @@ class PolarFlowExporter(object):
         for activity_ref in activity_refs:
             tcx = get_tcx_file(activity_ref)
             if tcx:
+                write_file(tcx)
                 tcx_files.append(tcx)
-        return tcx_files
 
-#------------------------------------------------------------------------------
+
+def write_file(tcx_file):
+    filename = "%s_%s.tcx" % (tcx_file.date_str.replace(':', '_'), tcx_file.workout_id)
+    with open(os.path.join(output_dir, filename), 'wb') as f:
+        f.write(tcx_file.content)
+    print("Wrote file %s" % filename)
 
 
 if __name__ == '__main__':
@@ -132,14 +137,8 @@ if __name__ == '__main__':
         os.makedirs(output_dir)
 
     exporter = PolarFlowExporter(username, password)
-    for tcx_file in exporter.get_tcx_files(from_date_str, to_date_str):
-        filename = "%s_%s.tcx" % (
-                        tcx_file.date_str.replace(':', '_'),
-                        tcx_file.workout_id)
-        output_file = open(os.path.join(output_dir, filename), 'wb')
-        output_file.write(tcx_file.content)
-        output_file.close()
-        print("Wrote file %s" % filename)
+    exporter.get_tcx_files(from_date_str, to_date_str)
+
 
     print("Export complete")
     print ("These activities were not downloaded:")
