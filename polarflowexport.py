@@ -27,6 +27,8 @@ import urllib2
 import dateutil.parser
 from tcxfile import TcxFile
 from throttling_handler import ThrottlingHandler
+import xml.etree.cElementTree as et
+
 
 
 class PolarFlowExporter(object):
@@ -113,11 +115,18 @@ class PolarFlowExporter(object):
             tcx = get_tcx_file(activity_ref)
             if tcx:
                 write_file(tcx)
-                tcx_files.append(tcx)
+               # tcx_files.append(tcx)
+
+def get_activity_from_tcx(tcx):
+    tree = et.XML(tcx)
+    for element in tree.iter():
+        if element.tag == "{http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2}Name":
+            return "%s" % (element.text.replace(' ', '_'))
 
 
 def write_file(tcx_file):
-    filename = "%s_%s.tcx" % (tcx_file.date_str.replace(':', '_'), tcx_file.workout_id)
+    activity_type = get_activity_from_tcx(tcx_file.content)
+    filename = "%s_%s_%s.tcx" % (tcx_file.date_str.replace(':', '_'), tcx_file.workout_id, activity_type)
     with open(os.path.join(output_dir, filename), 'wb') as f:
         f.write(tcx_file.content)
     print("Wrote file %s" % filename)
@@ -140,7 +149,8 @@ if __name__ == '__main__':
 
 
     print("Export complete")
-    print ("These activities were not downloaded:")
 
+
+    print ("These activities were not downloaded:")
     for d in exporter.failed_downloads:
         print(d)
